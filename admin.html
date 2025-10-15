@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Panel</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #1a1a1a; color: #00ff00; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: #2d3748; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .stats { display: flex; gap: 15px; margin: 20px 0; flex-wrap: wrap; }
+        .stat { background: #4a5568; padding: 15px; border-radius: 8px; min-width: 150px; text-align: center; }
+        .data-list { background: #2d3748; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        .data-item { background: #4a5568; padding: 15px; margin: 10px 0; border-radius: 8px; cursor: pointer; }
+        .data-item:hover { background: #5a6578; }
+        .data-view { background: #2d3748; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        pre { background: #000; color: #0f0; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 12px; max-height: 500px; overflow-y: auto; }
+        button { background: #48bb78; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background: #38a169; }
+        .empty { text-align: center; padding: 40px; color: #888; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🕵️ Admin Panel - Data Monitor</h1>
+            <button onclick="scanStorage()">🔍 Scan Storage</button>
+            <button onclick="clearAllData()">🗑️ Clear All</button>
+            <button onclick="exportAllData()">💾 Export All</button>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div id="totalItems">0</div>
+                <div>Data Items</div>
+            </div>
+            <div class="stat">
+                <div id="storageUsage">0 KB</div>
+                <div>Storage Used</div>
+            </div>
+            <div class="stat">
+                <div id="lastScan">Never</div>
+                <div>Last Scan</div>
+            </div>
+        </div>
+
+        <div class="data-list">
+            <h3>📁 Collected Data Items</h3>
+            <div id="dataContainer" class="empty">No data found. Click "Scan Storage" to search.</div>
+        </div>
+
+        <div class="data-view">
+            <h3>👁️ Data Preview</h3>
+            <div id="preview" class="empty">Select an item to view details</div>
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+        
+        function scanStorage() {
+            allData = [];
+            
+            // Сканируем весь localStorage
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                
+                // Ищем ключи с cors_data
+                if (key.startsWith('cors_data_')) {
+                    try {
+                        const item = JSON.parse(localStorage.getItem(key));
+                        allData.push({
+                            key: key,
+                            ...item
+                        });
+                    } catch (e) {
+                        console.log('Invalid data in:', key);
+                    }
+                }
+            }
+            
+            updateDisplay();
+        }
+        
+        function updateDisplay() {
+            // Обновляем статистику
+            document.getElementById('totalItems').textContent = allData.length;
+            document.getElementById('storageUsage').textContent = (JSON.stringify(localStorage).length / 1024).toFixed(2) + ' KB';
+            document.getElementById('lastScan').textContent = new Date().toLocaleTimeString();
+            
+            // Показываем данные
+            const container = document.getElementById('dataContainer');
+            
+            if (allData.length === 0) {
+                container.innerHTML = '<div class="empty">No CORS data found in storage</div>';
+                return;
+            }
+            
+            let html = '';
+            allData.forEach((item, index) => {
+                html += `
+                    <div class="data-item" onclick="showDetails(${index})">
+                        <strong>🔑 ${item.key}</strong><br>
+                        <span>User: ${item.user} | Endpoint: ${item.endpoint}</span><br>
+                        <small>${new Date(item.timestamp).toLocaleString()}</small>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function showDetails(index) {
+            const item = allData[index];
+            
+            document.getElementById('preview').innerHTML = `
+                <h4>📋 Data Details</h4>
+                <p><strong>Key:</strong> ${item.key}</p>
+                <p><strong>User:</strong> ${item.user}</p>
+                <p><strong>Endpoint:</strong> ${item.endpoint}</p>
+                <p><strong>Time:</strong> ${new Date(item.timestamp).toLocaleString()}</p>
+                <p><strong>Domain:</strong> ${item.domain || 'N/A'}</p>
+                
+                <h4>📊 Data Content:</h4>
+                <pre>${JSON.stringify(item.data, null, 2)}</pre>
+                
+                <button onclick="downloadItem(${index})">📥 Download This Item</button>
+                <button onclick="deleteItem('${item.key}')">🗑️ Delete This Item</button>
+            `;
+        }
+        
+        function downloadItem(index) {
+            const item = allData[index];
+            const blob = new Blob([JSON.stringify(item, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `cors-data-${item.user}-${item.timestamp}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function deleteItem(key) {
+            if (confirm('Delete this data item?')) {
+                localStorage.removeItem(key);
+                scanStorage();
+            }
+        }
+        
+        function clearAllData() {
+            if (confirm('Delete ALL CORS data from storage?')) {
+                // Удаляем только cors_data ключи
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.startsWith('cors_data_')) {
+                        localStorage.removeItem(key);
+                    }
+                }
+                scanStorage();
+            }
+        }
+        
+        function exportAllData() {
+            const exportData = {
+                exported_at: new Date().toISOString(),
+                total_items: allData.length,
+                data: allData
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `cors-data-export-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        // Авто-сканирование при загрузке
+        window.onload = function() {
+            scanStorage();
+            setInterval(scanStorage, 5000); // Сканируем каждые 5 секунд
+        };
+    </script>
+</body>
+</html>
